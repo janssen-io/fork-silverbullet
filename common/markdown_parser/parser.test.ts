@@ -240,3 +240,58 @@ Deno.test("Test NakedURL parser", () => {
     "http://abc.com?e=2.71",
   ]);
 });
+
+const tableSample = `
+| Header A | Header B |
+|----------|----------|
+| [[Wiki|Alias]] | 1B |
+| 2A             | 2B |
+| 3A | {[My: Command|Alias]("args", 1)} |
+`;
+
+Deno.test("Test table parser", () => {
+  const tree = parseMarkdown(tableSample);
+  const headerRow = collectNodesOfType(tree, "TableHeader")[0];
+  const headerCells = collectNodesOfType(headerRow, "TableCell");
+  assertEquals(headerCells.map((x) => x.children![0].text), [
+    "Header A",
+    "Header B",
+  ]);
+
+  const tableRows = collectNodesOfType(tree, "TableRow");
+  const cells = tableRows.flatMap((row) =>
+    collectNodesOfType(row, "TableCell")
+  );
+
+  assertEquals(cells.map((x) => x.children![0].text), [
+    undefined,
+    "1B",
+    "2A",
+    "2B",
+    "3A",
+    undefined,
+  ]);
+
+  // Check the Wiki Link - Make sure no backslash has been added (issue 943)
+  const linkCell = cells[0];
+  assertEquals(linkCell.children![0].type, "WikiLink");
+
+  const wikiName = findNodeOfType(linkCell, "WikiLinkPage");
+  assertEquals(wikiName!.children![0].text, "Wiki");
+
+  const wikiAlias = findNodeOfType(linkCell, "WikiLinkAlias");
+  assertEquals(wikiAlias!.children![0].text, "Alias");
+
+  // Check the Command Link - Make sure no backslash has been added (issue 1016)
+  const commandCell = cells[5];
+  assertEquals(commandCell.children![0].type, "CommandLink");
+
+  const commandName = findNodeOfType(commandCell, "CommandLinkName");
+  assertEquals(commandName!.children![0].text, "My: Command");
+
+  const commandAlias = findNodeOfType(commandCell, "CommandLinkAlias");
+  assertEquals(commandAlias!.children![0].text, "Alias");
+
+  const commandArgs = findNodeOfType(commandCell, "CommandLinkArgs");
+  assertEquals(commandArgs!.children![0].text, '"args", 1');
+});
